@@ -21,11 +21,27 @@ MetadataExtractor            ← word/line counts, table/list detection, languag
     │
     ▼
 GCS (corporate-processed-docs)  ← JSON results
+    │
+    ▼
+Embedder (Vertex AI)           ← text-embedding-005
+    │
+    ▼
+Vector Store (Cloud SQL pgvector)  ← cosine similarity search
+
+┌──────────────────────────────────────────────────┐
+│  Airflow DAG (scheduled, retries, DLQ)           │
+│  ┌─────────┐  ┌──────────┐  ┌───────────────┐   │
+│  │Discover │→ │ Process  │→ │ Handle Results│   │
+│  │ Files   │  │ (map)    │  │ (index + DLQ) │   │
+│  └─────────┘  └──────────┘  └───────────────┘   │
+└──────────────────────────────────────────────────┘
 ```
 
 ## Project Structure
 
 ```
+├── dags/
+│   └── pipeline_dag.py         # Airflow DAG (scheduled, retries, DLQ)
 ├── main.py                     # CLI entry point
 ├── pyproject.toml              # Project config & dependencies
 ├── .env.example                # Environment variable template
@@ -34,6 +50,7 @@ GCS (corporate-processed-docs)  ← JSON results
 │   ├── setup-output-bucket.sh  # Create output bucket for results
 │   ├── setup-cloudsql.sh       # Create Cloud SQL PG instance + database
 │   ├── start-cloudsql-proxy.sh # Local Cloud SQL Auth Proxy
+│   ├── setup-composer.sh       # Create Cloud Composer 3 environment
 │   ├── process-doc.sh          # Single-file processing via curl
 │   ├── batch-process.sh        # Batch processing via curl
 │   └── deploy-function.sh     # Deploy Cloud Function + GCS notification
@@ -71,6 +88,9 @@ uv run python main.py process gs://corporate-raw-docs/sample.pdf --upload
 
 # 6. Batch process everything already in the bucket
 uv run python main.py batch --prefix ""
+
+# 7. (Optional) Deploy Airflow DAG for scheduled processing
+./scripts/setup-composer.sh
 ```
 
 ## Commands
@@ -95,13 +115,16 @@ uv run python main.py batch --prefix ""
 - **Cleaning:** Custom Python (regex-based normalisation)
 - **Chunking:** LangChain `RecursiveCharacterTextSplitter`
 - **Metadata:** Custom extraction (word counts, table/list detection, language hints)
-- **Deployment target:** Cloud Functions / Cloud Run (Airflow DAG optional)
+- **Orchestration:** Cloud Composer (Airflow DAG with retries, DLQ, scheduled runs)
+- **Vector store:** Cloud SQL for PostgreSQL (pgvector extension)
+- **Embeddings:** Vertex AI `text-embedding-005`
+- **Deployment target:** Cloud Functions / Cloud Composer
 
 ## To-Do for Production
 
 - [x] GCS event trigger (Pub/Sub → Cloud Function) — `scripts/deploy-function.sh`
 - [x] Add chunk embeddings (Vertex AI `text-embedding-005`) — `src/pipeline/embedder.py`
 - [x] Store chunks in vector DB (Cloud SQL pgvector) — `src/pipeline/vector_store.py`
-- [ ] Airflow DAG for scheduling & retries
+- [x] Airflow DAG for scheduling & retries — `dags/pipeline_dag.py`
 - [ ] Unit tests
 - [ ] Error handling & dead-letter queue
