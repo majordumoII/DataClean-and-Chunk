@@ -12,3 +12,4 @@ This foundational project solves the "messy data" bottleneck by creating a relia
 - **What It Builds:** A serverless pipeline that automatically detects new documents in cloud storage, cleans the text, splits it into semantic chunks, and extracts key metadata.
 - **How It Connects:** This clean, structured data layer provides the exact data input needed for Project 2.
 - **Tech Stack:** AWS S3 or Google Cloud Storage, Python, Apache Airflow or AWS Lambda, and LangChain for text chunking.
+
