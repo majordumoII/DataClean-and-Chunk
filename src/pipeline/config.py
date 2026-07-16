@@ -23,6 +23,18 @@ class PipelineConfig:
     chunk_overlap: int = field(
         default_factory=lambda: int(os.getenv("CHUNK_OVERLAP", "200"))
     )
+    embedding_model_name: str = field(
+        default_factory=lambda: os.getenv("EMBEDDING_MODEL", "text-embedding-005")
+    )
+    embedding_dimensions: int = field(
+        default_factory=lambda: int(os.getenv("EMBEDDING_DIMENSIONS", "768"))
+    )
+    pg_connection_string: str = field(
+        default_factory=lambda: os.getenv("PG_CONNECTION_STRING", "")
+    )
+    vector_table: str = field(
+        default_factory=lambda: os.getenv("VECTOR_TABLE", "document_chunks")
+    )
 
     @property
     def processor_version(self) -> str:

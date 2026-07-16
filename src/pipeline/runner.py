@@ -80,6 +80,42 @@ class PipelineRunner:
         logger.info("Uploaded results to gs://%s/%s", self.config.output_bucket, output_path)
         return f"gs://{self.config.output_bucket}/{output_path}"
 
+    def process_bucket_prefix_detailed(
+        self, prefix: str = "", upload: bool = True
+    ) -> list[dict]:
+        """Process all PDFs and return full result dicts (for embedding)."""
+        bucket = self.storage_client.bucket(self.config.input_bucket)
+        blobs = bucket.list_blobs(prefix=prefix)
+        pdf_blobs = [b for b in blobs if b.name.lower().endswith(".pdf")]
+
+        if not pdf_blobs:
+            logger.warning("No PDFs found under gs://%s/%s", self.config.input_bucket, prefix)
+            return []
+
+        results = []
+        for blob in pdf_blobs:
+            gcs_uri = f"gs://{self.config.input_bucket}/{blob.name}"
+            try:
+                result = self.process_file(gcs_uri)
+                if upload:
+                    self._upload_result(result)
+                results.append(result)
+            except Exception as e:
+                logger.error("Failed to process %s: %s", gcs_uri, e)
+        return results
+
+    def _upload_result(self, result: dict) -> str:
+        """Upload a single result dict to the output bucket."""
+        output_filename = result["filename"].rsplit(".", 1)[0] + ".json"
+        output_path = f"results/{output_filename}"
+        bucket = self.storage_client.bucket(self.config.output_bucket)
+        blob = bucket.blob(output_path)
+        blob.upload_from_string(
+            json.dumps(result, indent=2), content_type="application/json"
+        )
+        logger.info("Uploaded results to gs://%s/%s", self.config.output_bucket, output_path)
+        return f"gs://{self.config.output_bucket}/{output_path}"
+
     def process_bucket_prefix(self, prefix: str = "") -> list[str]:
         """Process all PDFs in the input bucket under a given prefix."""
         bucket = self.storage_client.bucket(self.config.input_bucket)

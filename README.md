@@ -32,6 +32,8 @@ GCS (corporate-processed-docs)  ← JSON results
 ├── scripts/
 │   ├── setup-docai.sh          # Enable API + create Layout Parser processor
 │   ├── setup-output-bucket.sh  # Create output bucket for results
+│   ├── setup-cloudsql.sh       # Create Cloud SQL PG instance + database
+│   ├── start-cloudsql-proxy.sh # Local Cloud SQL Auth Proxy
 │   ├── process-doc.sh          # Single-file processing via curl
 │   ├── batch-process.sh        # Batch processing via curl
 │   └── deploy-function.sh     # Deploy Cloud Function + GCS notification
@@ -42,6 +44,8 @@ GCS (corporate-processed-docs)  ← JSON results
 │   ├── cleaner.py              # Text cleaning/normalisation
 │   ├── chunker.py              # LangChain semantic chunking
 │   ├── metadata.py             # Metadata extraction
+│   ├── embedder.py             # Vertex AI text-embedding generation
+│   ├── vector_store.py         # pgvector storage + similarity search
 │   ├── runner.py               # Pipeline orchestrator
 │   └── event_handler.py        # Cloud Function entry point (GCS→Pub/Sub)
 ```
@@ -75,7 +79,13 @@ uv run python main.py batch --prefix ""
 |---------|-------------|
 | `python main.py process <gcs_uri>` | Process one file from GCS |
 | `python main.py process <gcs_uri> --upload` | Process + upload JSON result to output bucket |
+| `python main.py process <gcs_uri> --store` | Process + embed chunks into pgvector |
+| `python main.py process <gcs_uri> --upload --store` | Process + upload + embed all at once |
+| `python main.py store <gcs_uri_or_path>` | Embed & store an already-processed result JSON |
+| `python main.py search "natural language query"` | Semantic search over stored chunks |
+| `python main.py search --top-k 20 "query"` | Search with more results |
 | `python main.py batch --prefix ""` | Process all PDFs in the input bucket |
+| `python main.py batch --prefix "" --store` | Process + embed everything |
 | `python main.py info` | Show current pipeline configuration |
 
 ## Tech Stack
@@ -90,8 +100,8 @@ uv run python main.py batch --prefix ""
 ## To-Do for Production
 
 - [x] GCS event trigger (Pub/Sub → Cloud Function) — `scripts/deploy-function.sh`
-- [ ] Add chunk embeddings (Vertex AI / OpenAI)
-- [ ] Store chunks in vector DB (Cloud SQL pgvector / Pinecone)
+- [x] Add chunk embeddings (Vertex AI `text-embedding-005`) — `src/pipeline/embedder.py`
+- [x] Store chunks in vector DB (Cloud SQL pgvector) — `src/pipeline/vector_store.py`
 - [ ] Airflow DAG for scheduling & retries
 - [ ] Unit tests
 - [ ] Error handling & dead-letter queue
