@@ -4,6 +4,7 @@
 .venv/
 .uv/
 .python-version
+.gitignore
 
 # Note: Keep uv.lock tracked if you are building an application.
 # Uncomment the line below only if you are building a shareable library.
