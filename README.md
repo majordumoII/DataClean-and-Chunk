@@ -1,4 +1,4 @@
-# Potential Project portfolio to production
+# Potential Project Portfolio to Production
 
 This **3-stage portfolio curriculum** builds a production-ready, agentic AI platform from scratch. Each project acts as a building block for the next, moving from core data engineering to advanced AI orchestration and cost management. This progression directly addresses the high-value problems of 2026: data bottlenecks, untrusted AI agents, and runaway cloud costs.
 
