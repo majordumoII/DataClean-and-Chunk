@@ -14,7 +14,7 @@ gcloud sql instances create "$INSTANCE" \
     --project="$PROJECT_ID" \
     --database-version=POSTGRES_17 \
     --tier=db-custom-1-3840 \
-    --region=us-central1 \
+    --region=us-east1 \
     --root-password="$PASSWORD"
 
 echo "=== Creating database: $DB ==="
