@@ -10,7 +10,7 @@ To deploy:
         --source . \
         --entry-point handle_gcs_event \
         --env-vars-file .env.yaml \
-        --memory 512MB \
+        --memory 1024MB \
         --timeout 300s
 """
 
@@ -26,6 +26,8 @@ load_dotenv()
 from src.pipeline.config import PipelineConfig
 from src.pipeline.runner import PipelineRunner
 
+logging.basicConfig(level=logging.INFO)
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -69,10 +71,13 @@ def handle_gcs_event(*args):
         logger.error("Failed to decode message: %s", e)
         return
 
-    # Extract bucket and object name from GCS notification
-    bucket = notification.get("bucket")
-    name = notification.get("name")
-    event_type = notification.get("eventType", "")
+    # GCS Pub/Sub notifications carry bucket/object/eventType as message
+    # attributes (bucketId, objectId, eventType); the decoded JSON body is
+    # just the GCS object resource and has no eventType field at all.
+    attributes = message.get("attributes") or {}
+    bucket = attributes.get("bucketId") or notification.get("bucket")
+    name = attributes.get("objectId") or notification.get("name")
+    event_type = attributes.get("eventType", "")
 
     if not bucket or not name:
         logger.warning("Notification missing bucket or name: %s", notification)

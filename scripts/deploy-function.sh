@@ -44,7 +44,7 @@ gcloud pubsub topics add-iam-policy-binding "$TOPIC_NAME" \
 
 # ---- Step 4: Set up GCS notification on the input bucket ----
 echo "=== Setting up GCS notification on gs://$INPUT_BUCKET ==="
-EXISTING=$(gcloud storage notifications list --bucket "$INPUT_BUCKET" --format="value(topic)" 2>/dev/null | grep "$TOPIC_NAME" || true)
+EXISTING=$(gcloud storage buckets notifications list "gs://$INPUT_BUCKET" --format=json 2>/dev/null | grep "$TOPIC_NAME" || true)
 if [ -z "$EXISTING" ]; then
     gcloud storage buckets notifications create \
         gs://"$INPUT_BUCKET" \
@@ -66,6 +66,7 @@ fi
 # shellcheck disable=SC1091
 source .env
 cat > .env.yaml << EOF
+GOOGLE_CLOUD_PROJECT: "${GOOGLE_CLOUD_PROJECT:-$PROJECT_ID}"
 DOCAI_LOCATION: "${DOCAI_LOCATION:-us}"
 DOCAI_PROCESSOR_ID: "${DOCAI_PROCESSOR_ID}"
 INPUT_BUCKET: "${INPUT_BUCKET:-corporate-raw-docs}"
@@ -84,7 +85,7 @@ gcloud functions deploy "$FUNCTION_NAME" \
     --entry-point=handle_gcs_event \
     --env-vars-file=.env.yaml \
     --region="$LOCATION" \
-    --memory=512MB \
+    --memory=1024MB \
     --timeout=300s \
     --min-instances=0 \
     --max-instances=10
