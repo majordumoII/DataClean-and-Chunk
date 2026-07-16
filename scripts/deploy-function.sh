@@ -14,7 +14,7 @@ PROJECT_ID=$(gcloud config get project)
 TOPIC_NAME="corporate-raw-docs-notify"
 FUNCTION_NAME="docai-pipeline"
 INPUT_BUCKET="${INPUT_BUCKET:-corporate-raw-docs}"
-LOCATION="${LOCATION:-us}"
+LOCATION="${LOCATION:-us-east1}"
 
 echo "Project:  $PROJECT_ID"
 echo "Bucket:   $INPUT_BUCKET"
@@ -66,12 +66,12 @@ fi
 # shellcheck disable=SC1091
 source .env
 cat > .env.yaml << EOF
-DOCAI_LOCATION: ${DOCAI_LOCATION:-us}
-DOCAI_PROCESSOR_ID: ${DOCAI_PROCESSOR_ID}
-INPUT_BUCKET: ${INPUT_BUCKET:-corporate-raw-docs}
-OUTPUT_BUCKET: ${OUTPUT_BUCKET:-corporate-processed-docs}
-CHUNK_SIZE: ${CHUNK_SIZE:-1024}
-CHUNK_OVERLAP: ${CHUNK_OVERLAP:-200}
+DOCAI_LOCATION: "${DOCAI_LOCATION:-us}"
+DOCAI_PROCESSOR_ID: "${DOCAI_PROCESSOR_ID}"
+INPUT_BUCKET: "${INPUT_BUCKET:-corporate-raw-docs}"
+OUTPUT_BUCKET: "${OUTPUT_BUCKET:-corporate-processed-docs}"
+CHUNK_SIZE: "${CHUNK_SIZE:-1024}"
+CHUNK_OVERLAP: "${CHUNK_OVERLAP:-200}"
 EOF
 echo "  Created .env.yaml"
 

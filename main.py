@@ -12,6 +12,7 @@ load_dotenv()
 
 from src.pipeline import Embedder, PipelineRunner, VectorStore
 from src.pipeline.config import PipelineConfig
+from src.pipeline.event_handler import handle_gcs_event
 
 logging.basicConfig(
     level=logging.INFO,

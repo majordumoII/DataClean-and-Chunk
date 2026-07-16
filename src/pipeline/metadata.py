@@ -1,7 +1,7 @@
 """Metadata extraction from documents."""
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class MetadataExtractor:
@@ -18,7 +18,7 @@ class MetadataExtractor:
             "has_tables": MetadataExtractor._detect_tables(text),
             "has_lists": MetadataExtractor._detect_lists(text),
             "has_numbers": MetadataExtractor._detect_numbers(text),
-            "extracted_at": datetime.utcnow().isoformat() + "Z",
+            "extracted_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "language": MetadataExtractor._detect_language(text),
         }
 
