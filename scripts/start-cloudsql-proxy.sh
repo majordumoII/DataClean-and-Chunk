@@ -5,9 +5,13 @@ set -euo pipefail
 # You'll need the Cloud SQL Auth Proxy binary:
 #   https://cloud.google.com/sql/docs/postgres/connect-auth-proxy
 
-PROJECT="${1:?"Usage: $0 <project-id> <instance-name> [port]"}
+PROJECT="${1:?"Usage: $0 <project-id> <instance-name> [port]"}"
 INSTANCE="${2:?"Usage: $0 <project-id> <instance-name> [port]"}"
 PORT="${3:-5432}"
 
-echo "Starting Cloud SQL Auth Proxy for $PROJECT:$INSTANCE on port $PORT ..."
-exec cloud-sql-proxy "$PROJECT:$INSTANCE" --port "$PORT"
+CONNECTION_NAME=$(gcloud sql instances describe "$INSTANCE" \
+    --project="$PROJECT" \
+    --format='value(connectionName)')
+
+echo "Starting Cloud SQL Auth Proxy for $CONNECTION_NAME on port $PORT ..."
+exec cloud-sql-proxy "$CONNECTION_NAME" --port "$PORT"

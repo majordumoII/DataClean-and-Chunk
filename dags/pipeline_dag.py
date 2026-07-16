@@ -10,13 +10,13 @@ Deploy this file to your Cloud Composer environment's dags/ folder.
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
+import pendulum
 from airflow import DAG
 from airflow.decorators import task
 from airflow.models import Variable
-from airflow.utils.dates import days_ago
 from google.cloud import storage as gcs
 
 # ── Default args ──────────────────────────────────────────────────────────────
@@ -84,8 +84,8 @@ with DAG(
     dag_id="document_pipeline",
     default_args=DEFAULT_ARGS,
     description="Extract, clean, chunk, embed, and store corporate documents",
-    schedule_interval=os.getenv("DAG_SCHEDULE", "0 */6 * * *"),  # every 6 hours
-    start_date=days_ago(1),
+    schedule=os.getenv("DAG_SCHEDULE", "0 */6 * * *"),  # every 6 hours
+    start_date=pendulum.today("UTC").add(days=-1),
     catchup=False,
     tags=["documents", "pipeline", "rag"],
     doc_md=__doc__,
