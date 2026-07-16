@@ -24,6 +24,10 @@ env/
 *.swp
 *.swo
 
+# Local config files (keep local only)
+.gitignore
+.python-version
+
 # OS
 .DS_Store
 Thumbs.db
