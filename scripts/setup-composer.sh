@@ -35,13 +35,19 @@ for ROLE in roles/documentai.apiUser roles/storage.admin roles/aiplatform.user r
 done
 echo ""
 
-# Create the environment (takes ~20-30 minutes)
+# Create the environment (takes ~20-30 minutes).
+# Worker memory is bumped above the "small" default (2GB) because
+# process_file runs DocAI extraction + LangChain chunking, which OOMs
+# small workers under concurrent task execution (mirrors the 512MB ->
+# 1024MB bump needed for the equivalent Cloud Function).
 gcloud composer environments create "$ENV_NAME" \
     --project="$PROJECT_ID" \
     --location="$REGION" \
     --environment-size=small \
     --image-version=composer-3-airflow-2.10.5 \
     --service-account="$SA_EMAIL" \
+    --worker-memory=4GB \
+    --worker-cpu=1 \
     --airflow-configs=core-default_task_retries=3
 
 # Get the DAG bucket path
