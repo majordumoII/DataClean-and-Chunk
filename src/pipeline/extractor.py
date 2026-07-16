@@ -12,11 +12,15 @@ class DocumentExtractor:
         opts = ClientOptions(
             api_endpoint=f"{config.location}-documentai.googleapis.com"
         )
-        self.client = documentai.DocumentProcessorServiceClient(client_options=opts)
+        # REST transport works reliably with processor version paths
+        self.client = documentai.DocumentProcessorServiceClient(
+            client_options=opts, transport="rest"
+        )
 
     @property
     def _processor_name(self) -> str:
-        return self.client.processor_path(
+        """Full processor version resource path."""
+        return self.client.processor_version_path(
             self.config.project_id,
             self.config.location,
             self.config.processor_id,
@@ -44,14 +48,19 @@ class DocumentExtractor:
         result = self.client.process_document(request=request)
         return result.document
 
-    def extract_text(self, gcs_uri: str, mime_type: str = "application/pdf") -> str:
-        """Extract raw text content from a document."""
-        doc = self.extract(gcs_uri, mime_type)
-        return doc.text
+    @staticmethod
+    def _text_from_document(doc: documentai.Document) -> str:
+        """Extract text from a Document object, falling back to chunk content."""
+        if doc.text:
+            return doc.text
+        chunks = doc.chunked_document.chunks
+        if chunks:
+            return "\n\n".join(c.content for c in chunks)
+        return ""
 
-    def extract_chunks(self, gcs_uri: str, mime_type: str = "application/pdf") -> list[dict]:
-        """Extract RAG-ready chunks with metadata."""
-        doc = self.extract(gcs_uri, mime_type)
+    @staticmethod
+    def _chunks_from_document(doc: documentai.Document) -> list[dict]:
+        """Extract RAG-ready chunk metadata from a Document object."""
         chunks = []
         for i, chunk in enumerate(doc.chunked_document.chunks):
             chunks.append(
@@ -64,3 +73,11 @@ class DocumentExtractor:
                 }
             )
         return chunks
+
+    def extract_text(self, gcs_uri: str, mime_type: str = "application/pdf") -> str:
+        """Extract raw text content from a document (single-use convenience)."""
+        return self._text_from_document(self.extract(gcs_uri, mime_type))
+
+    def extract_chunks(self, gcs_uri: str, mime_type: str = "application/pdf") -> list[dict]:
+        """Extract RAG-ready chunks with metadata (single-use convenience)."""
+        return self._chunks_from_document(self.extract(gcs_uri, mime_type))

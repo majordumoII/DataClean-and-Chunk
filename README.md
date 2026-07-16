@@ -29,9 +29,6 @@ GCS (corporate-processed-docs)  ← JSON results
 ├── main.py                     # CLI entry point
 ├── pyproject.toml              # Project config & dependencies
 ├── .env.example                # Environment variable template
-├── main.py                     # CLI entry point
-├── pyproject.toml              # Project config & dependencies
-├── .env.example                # Environment variable template
 ├── scripts/
 │   ├── setup-docai.sh          # Enable API + create Layout Parser processor
 │   ├── setup-output-bucket.sh  # Create output bucket for results

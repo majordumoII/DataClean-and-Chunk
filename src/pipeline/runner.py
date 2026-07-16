@@ -32,10 +32,11 @@ class PipelineRunner:
         filename = os.path.basename(gcs_uri)
         logger.info("Processing %s ...", filename)
 
-        # Step 1: Extract via DocAI Layout Parser
+        # Step 1: Extract via DocAI Layout Parser (single API call)
         logger.info("  Extracting text via DocAI ...")
-        raw_text = self.extractor.extract_text(gcs_uri, mime_type)
-        docai_chunks = self.extractor.extract_chunks(gcs_uri, mime_type)
+        doc = self.extractor.extract(gcs_uri, mime_type)
+        raw_text = self.extractor._text_from_document(doc)
+        docai_chunks = self.extractor._chunks_from_document(doc)
         logger.info("  Got %d chars and %d DocAI chunks", len(raw_text), len(docai_chunks))
 
         # Step 2: Clean the extracted text
