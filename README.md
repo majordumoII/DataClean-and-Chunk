@@ -4,7 +4,7 @@ This **3-stage portfolio curriculum** builds a production-ready, agentic AI pl
 
 ---
 
-## **Project 1: The Automated Data Cleaning & Chunking Engine**
+## **Proj 1: Automated Data Cleaning & Chunking Engine**
 
 This foundational project solves the "messy data" bottleneck by creating a reliable pipeline that prepares unstructured corporate data for AI ingestion.
 
