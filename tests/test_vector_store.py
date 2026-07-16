@@ -4,7 +4,6 @@ import json
 from unittest.mock import MagicMock, PropertyMock
 
 import pytest
-import pgvector.psycopg2
 
 from src.pipeline.vector_store import VectorStore
 
@@ -27,20 +26,22 @@ def mock_conn():
 class TestVectorStore:
     def test_ensure_table_creates_table(self, config, mocker, mock_conn):
         mocker.patch("src.pipeline.vector_store.psycopg2.connect", return_value=mock_conn)
-        mocker.patch.object(pgvector.psycopg2, "register_vector")
+        mocker.patch("src.pipeline.vector_store.register_vector")
 
         store = VectorStore(config)
         store.ensure_table()
 
         calls = mock_conn.cursor.return_value.__enter__.return_value.execute.call_args_list
-        create_table_sql = calls[0][0][0]
+        extension_sql = calls[0][0][0]
+        assert "CREATE EXTENSION IF NOT EXISTS vector" in extension_sql
+        create_table_sql = calls[1][0][0]
         assert "CREATE TABLE IF NOT EXISTS" in create_table_sql
         assert config.vector_table in create_table_sql
         assert mock_conn.commit.called
 
     def test_store_chunk_returns_id(self, config, mocker, mock_conn):
         mocker.patch("src.pipeline.vector_store.psycopg2.connect", return_value=mock_conn)
-        mocker.patch.object(pgvector.psycopg2, "register_vector")
+        mocker.patch("src.pipeline.vector_store.register_vector")
 
         store = VectorStore(config)
         row_id = store.store_chunk(
@@ -56,7 +57,7 @@ class TestVectorStore:
 
     def test_store_chunks_mismatch_raises(self, config, mocker):
         mocker.patch("src.pipeline.vector_store.psycopg2.connect")
-        mocker.patch.object(pgvector.psycopg2, "register_vector")
+        mocker.patch("src.pipeline.vector_store.register_vector")
 
         store = VectorStore(config)
         with pytest.raises(ValueError, match="must have the same length"):
@@ -71,7 +72,7 @@ class TestVectorStore:
         mock_cursor = mock_conn.cursor.return_value.__enter__.return_value
         mock_cursor.fetchall.return_value = [(1,), (2,)]
         mocker.patch("src.pipeline.vector_store.psycopg2.connect", return_value=mock_conn)
-        mocker.patch.object(pgvector.psycopg2, "register_vector")
+        mocker.patch("src.pipeline.vector_store.register_vector")
 
         store = VectorStore(config)
         ids = store.store_chunks(
@@ -93,7 +94,7 @@ class TestVectorStore:
             (2, "gs://b/doc.pdf", "doc.pdf", 1, "Content 2", {}, 0.87),
         ]
         mocker.patch("src.pipeline.vector_store.psycopg2.connect", return_value=mock_conn)
-        mocker.patch.object(pgvector.psycopg2, "register_vector")
+        mocker.patch("src.pipeline.vector_store.register_vector")
 
         store = VectorStore(config)
         results = store.similarity_search(
@@ -109,7 +110,7 @@ class TestVectorStore:
     def test_close_connection(self, config, mocker, mock_conn):
         mock_conn.closed = False
         mocker.patch("src.pipeline.vector_store.psycopg2.connect", return_value=mock_conn)
-        mocker.patch.object(pgvector.psycopg2, "register_vector")
+        mocker.patch("src.pipeline.vector_store.register_vector")
 
         store = VectorStore(config)
         _ = store.conn
@@ -120,24 +121,24 @@ class TestVectorStore:
     def test_close_idempotent_when_already_closed(self, config, mocker, mock_conn):
         mock_conn.closed = True
         mocker.patch("src.pipeline.vector_store.psycopg2.connect", return_value=mock_conn)
-        mocker.patch.object(pgvector.psycopg2, "register_vector")
+        mocker.patch("src.pipeline.vector_store.register_vector")
 
         store = VectorStore(config)
         store.close()  # should not raise
 
     def test_ensure_table_handles_existing_index(self, config, mocker, mock_conn):
         mock_cursor = mock_conn.cursor.return_value.__enter__.return_value
-        # Make the second execute (CREATE INDEX) raise
-        mock_cursor.execute.side_effect = [None, Exception("index exists")]
+        # Make the third execute (CREATE INDEX) raise, after extension + table DDL
+        mock_cursor.execute.side_effect = [None, None, Exception("index exists")]
         mocker.patch("src.pipeline.vector_store.psycopg2.connect", return_value=mock_conn)
-        mocker.patch.object(pgvector.psycopg2, "register_vector")
+        mocker.patch("src.pipeline.vector_store.register_vector")
 
         store = VectorStore(config)
         store.ensure_table()  # should not raise
 
     def test_stored_chunks_use_vector_cast(self, config, mocker, mock_conn):
         mocker.patch("src.pipeline.vector_store.psycopg2.connect", return_value=mock_conn)
-        mocker.patch.object(pgvector.psycopg2, "register_vector")
+        mocker.patch("src.pipeline.vector_store.register_vector")
 
         store = VectorStore(config)
         store.store_chunks(

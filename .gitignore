@@ -35,3 +35,6 @@ pipeline-sa-key.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Local tooling binaries
+bin/

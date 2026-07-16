@@ -29,6 +29,9 @@ class PipelineConfig:
     embedding_dimensions: int = field(
         default_factory=lambda: int(os.getenv("EMBEDDING_DIMENSIONS", "768"))
     )
+    embedding_location: str = field(
+        default_factory=lambda: os.getenv("EMBEDDING_LOCATION", "us-east1")
+    )
     pg_connection_string: str = field(
         default_factory=lambda: os.getenv("PG_CONNECTION_STRING", "")
     )

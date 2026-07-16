@@ -15,7 +15,7 @@ class Embedder:
 
     def __init__(self, config: PipelineConfig):
         self.config = config
-        aiplatform.init(project=config.project_id, location=config.location)
+        aiplatform.init(project=config.project_id, location=config.embedding_location)
         self._model = None
 
     @property

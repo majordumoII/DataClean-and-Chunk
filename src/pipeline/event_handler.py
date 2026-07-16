@@ -29,22 +29,32 @@ from src.pipeline.runner import PipelineRunner
 logger = logging.getLogger(__name__)
 
 
-def handle_gcs_event(cloud_event):
-    """Cloud Function entry point. Called via Eventarc / CloudEvents.
+def handle_gcs_event(*args):
+    """Cloud Function entry point. Called via Pub/Sub trigger.
 
-    Expects a CloudEvent wrapping a Pub/Sub message with GCS notification
-    payload (as sent by GCS notification config).
+    Handles both Gen 1 (data, context) and Gen 2 / CloudEvents formats.
     """
-    logger.info("Received event: %s", cloud_event["id"])
-
-    # Decode the Pub/Sub message data
-    data = cloud_event.data
-    if isinstance(data, dict) and "message" in data:
-        message = data["message"]
-    elif isinstance(data, dict):
-        message = data
+    # Determine the message payload from the args format
+    cloud_event = None
+    if len(args) == 1:
+        # Gen 2 / CloudEvents format: single CloudEvent argument
+        cloud_event = args[0]
+        logger.info("Received CloudEvent: %s", cloud_event.get("id", "?"))
+        raw = cloud_event.data
+        if isinstance(raw, dict) and "message" in raw:
+            message = raw["message"]
+        elif isinstance(raw, dict):
+            message = raw
+        else:
+            logger.error("Unexpected CloudEvent format")
+            return
+    elif len(args) >= 2:
+        # Gen 1 / Background function format: (data, context)
+        _data, context = args[0], args[1]
+        logger.info("Received background event: %s", context.event_id if hasattr(context, "event_id") else "?")
+        message = _data
     else:
-        logger.error("Unexpected event format")
+        logger.error("No arguments provided to handler")
         return
 
     encoded_data = message.get("data", "")

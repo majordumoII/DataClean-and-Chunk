@@ -12,7 +12,7 @@ class TestEmbedder:
     def test_init_calls_aiplatform(self, mock_init, config):
         Embedder(config)
         mock_init.assert_called_once_with(
-            project=config.project_id, location=config.location
+            project=config.project_id, location=config.embedding_location
         )
 
     @patch("src.pipeline.embedder.aiplatform.init")

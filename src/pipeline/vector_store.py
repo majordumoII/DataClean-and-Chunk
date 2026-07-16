@@ -4,13 +4,15 @@ import json
 import logging
 from typing import Any
 
-import pgvector
 import psycopg2
 import psycopg2.extras
+from pgvector.psycopg2 import register_vector
 
 from .config import PipelineConfig
 
 logger = logging.getLogger(__name__)
+
+EXTENSION_DDL = "CREATE EXTENSION IF NOT EXISTS vector"
 
 TABLE_DDL = """
 CREATE TABLE IF NOT EXISTS {table} (
@@ -27,8 +29,8 @@ CREATE TABLE IF NOT EXISTS {table} (
 
 INDEX_DDL = """
 CREATE INDEX IF NOT EXISTS idx_{table}_embedding
-    ON {table} USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
+    ON {table} USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
 """
 
 
@@ -44,11 +46,14 @@ class VectorStore:
         if self._conn is None or self._conn.closed:
             self._conn = psycopg2.connect(self.config.pg_connection_string)
             psycopg2.extras.register_uuid()
-            pgvector.psycopg2.register_vector(self._conn)
+            register_vector(self._conn)
         return self._conn
 
     def ensure_table(self) -> None:
-        """Create the vector table and index if they don't exist."""
+        """Create the vector extension, table, and index if they don't exist."""
+        with self.conn.cursor() as cur:
+            cur.execute(EXTENSION_DDL)
+        self.conn.commit()
         with self.conn.cursor() as cur:
             cur.execute(
                 TABLE_DDL.format(

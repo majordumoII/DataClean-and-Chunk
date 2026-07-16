@@ -116,7 +116,7 @@ uv run python main.py batch --prefix ""
 - **Chunking:** LangChain `RecursiveCharacterTextSplitter`
 - **Metadata:** Custom extraction (word counts, table/list detection, language hints)
 - **Orchestration:** Cloud Composer (Airflow DAG with retries, DLQ, scheduled runs)
-- **Vector store:** Cloud SQL for PostgreSQL (pgvector extension)
+- **Vector store:** Cloud SQL for PostgreSQL (pgvector extension, HNSW cosine index)
 - **Embeddings:** Vertex AI `text-embedding-005`
 - **Deployment target:** Cloud Functions / Cloud Composer
 
@@ -126,5 +126,5 @@ uv run python main.py batch --prefix ""
 - [x] Add chunk embeddings (Vertex AI `text-embedding-005`) — `src/pipeline/embedder.py`
 - [x] Store chunks in vector DB (Cloud SQL pgvector) — `src/pipeline/vector_store.py`
 - [x] Airflow DAG for scheduling & retries — `dags/pipeline_dag.py`
-- [ ] Unit tests
-- [ ] Error handling & dead-letter queue
+- [x] Unit tests — `tests/` (pytest, mocked GCP/DB clients)
+- [x] Error handling & dead-letter queue — `dags/pipeline_dag.py` (DLQ bucket + retry/backoff)
