@@ -1,4 +1,5 @@
 # Data Clean & Chunk — Automated Document Processing Pipeline
+(Free tier limited)
 
 A serverless pipeline that detects new documents in Google Cloud Storage, extracts text via Document AI Layout Parser, cleans the text, splits it into semantic chunks (LangChain), and extracts metadata — ready for RAG/AI ingestion.
 
