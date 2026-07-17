@@ -38,6 +38,15 @@ class PipelineConfig:
     vector_table: str = field(
         default_factory=lambda: os.getenv("VECTOR_TABLE", "document_chunks")
     )
+    # Cloud SQL instance connection name ("project:region:instance"). When
+    # set, VectorStore connects via the Cloud SQL Python Connector (IAM
+    # auth, no proxy/allowlisting needed) instead of pg_connection_string.
+    db_instance_connection_name: str = field(
+        default_factory=lambda: os.getenv("DB_INSTANCE_CONNECTION_NAME", "")
+    )
+    db_name: str = field(default_factory=lambda: os.getenv("DB_NAME", "docpipeline"))
+    db_user: str = field(default_factory=lambda: os.getenv("DB_USER", "pipeline"))
+    db_password: str = field(default_factory=lambda: os.getenv("DB_PASSWORD", ""))
 
     @property
     def processor_version(self) -> str:

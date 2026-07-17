@@ -63,21 +63,51 @@ echo "=== DAG bucket: $DAG_BUCKET ==="
 echo "=== Uploading DAG ==="
 gsutil cp "$REPO_ROOT/dags/pipeline_dag.py" "$DAG_BUCKET/"
 
-# Sync source code (the Composer workers need src.pipeline)
+# Sync source code (the Composer workers need src.pipeline).
+# NOTE: worker Celery processes cache Python imports for their pod
+# lifetime, so re-running just this upload against an already-running
+# environment (without a subsequent `environments update`, which forces
+# a worker pod restart) will NOT pick up the new code — workers keep
+# using whatever version of src.pipeline they first imported. This
+# script's own PyPI-install step below forces that restart on a fresh
+# deploy; if you're re-syncing source on a live environment, follow up
+# with a trivial `gcloud composer environments update` to force it.
 echo "=== Uploading source code ==="
 COMPSRC="${DAG_BUCKET/dags/dags\/src\/pipeline}"
-gsutil cp -r "$REPO_ROOT"/src/pipeline/*.py "$COMPSRC/"
+for f in "$REPO_ROOT"/src/pipeline/*.py; do
+    gsutil cp "$f" "$COMPSRC/$(basename "$f")"
+done
 
 # Install the pipeline's runtime dependencies on the Composer workers.
 # Composer only ships a base set of packages; process_file imports
-# langchain, google-cloud-documentai/aiplatform, and psycopg2/pgvector,
-# none of which are preinstalled.
+# langchain, google-cloud-documentai/aiplatform, and pgvector/the Cloud
+# SQL Python Connector, none of which are preinstalled.
 echo ""
 echo "=== Installing PyPI packages on Composer workers (takes a few minutes) ==="
 gcloud composer environments update "$ENV_NAME" \
     --project="$PROJECT_ID" \
     --location="$REGION" \
     --update-pypi-packages-from-file="$REPO_ROOT/scripts/composer-requirements.txt"
+
+# process_file calls PipelineConfig.from_env() directly (it does not read
+# the PIPELINE_* Airflow Variables below), so every value PipelineConfig
+# needs must exist as a real OS environment variable on the workers.
+# DB_INSTANCE_CONNECTION_NAME routes VectorStore through the Cloud SQL
+# Python Connector (IAM auth) instead of a direct TCP connection, since
+# Composer workers have no stable IP to allowlist on the Cloud SQL
+# instance and there's no proxy sidecar configured here.
+echo ""
+echo "=== Setting pipeline environment variables ==="
+if [ -f "$REPO_ROOT/.env" ]; then
+    # shellcheck disable=SC1090
+    source "$REPO_ROOT/.env"
+fi
+# Note: GOOGLE_CLOUD_PROJECT is set automatically by Composer and cannot
+# be overridden via --update-env-variables.
+gcloud composer environments update "$ENV_NAME" \
+    --project="$PROJECT_ID" \
+    --location="$REGION" \
+    --update-env-variables="DOCAI_LOCATION=${DOCAI_LOCATION:-us},DOCAI_PROCESSOR_ID=${DOCAI_PROCESSOR_ID:-},EMBEDDING_LOCATION=${EMBEDDING_LOCATION:-us-east1},EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-005},EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-768},INPUT_BUCKET=${INPUT_BUCKET:-corporate-raw-docs},OUTPUT_BUCKET=${OUTPUT_BUCKET:-corporate-processed-docs},DB_INSTANCE_CONNECTION_NAME=${DB_INSTANCE_CONNECTION_NAME:-},DB_NAME=${DB_NAME:-docpipeline},DB_USER=${DB_USER:-pipeline},DB_PASSWORD=${DB_PASSWORD:-},VECTOR_TABLE=${VECTOR_TABLE:-document_chunks}"
 
 echo ""
 echo "=== Setting Airflow Variables ==="

@@ -141,7 +141,12 @@ with DAG(
         context["ti"].xcom_push(key="pending_files", value=pending)
         return pending
 
-    @task
+    # Cap concurrent mapped instances: each one runs DocAI extraction +
+    # LangChain chunking + embedding in-process, which is memory-heavy
+    # enough that running all of them at once can exhaust a worker's
+    # memory (observed as silent worker pod deaths / Airflow "zombie
+    # job" detection with no application-level traceback).
+    @task(max_active_tis_per_dag=2)
     def process_file(file_info: dict) -> dict:
         """Run the full pipeline on a single PDF."""
         from src.pipeline import Embedder, VectorStore

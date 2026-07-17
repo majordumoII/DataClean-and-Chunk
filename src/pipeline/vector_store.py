@@ -4,13 +4,36 @@ import json
 import logging
 from typing import Any
 
-import psycopg2
-import psycopg2.extras
-from pgvector.psycopg2 import register_vector
+from google.cloud.sql.connector import Connector
+from pgvector import Vector
 
 from .config import PipelineConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _register_vector_dbapi(conn: Any) -> None:
+    """Register pgvector in/out adapters on a pg8000 DBAPI connection.
+
+    pgvector.pg8000.register_vector expects a pg8000.native.Connection
+    (uses conn.run(...) for the type lookup); the Cloud SQL Connector and
+    our local dbapi.connect() both produce pg8000.dbapi.Connection, which
+    lacks .run() but does support the same register_in/out_adapter calls.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT typname, oid FROM pg_type WHERE oid IN "
+        "(to_regtype('vector'), to_regtype('halfvec'), to_regtype('sparsevec'))"
+    )
+    type_info = dict(cur.fetchall())
+    cur.close()
+
+    if "vector" not in type_info:
+        raise RuntimeError("vector type not found in the database")
+
+    conn.register_out_adapter(Vector, lambda v: v.to_text())
+    conn.register_in_adapter(type_info["vector"], Vector.from_text)
+
 
 EXTENSION_DDL = "CREATE EXTENSION IF NOT EXISTS vector"
 
@@ -40,35 +63,61 @@ class VectorStore:
     def __init__(self, config: PipelineConfig):
         self.config = config
         self._conn: Any = None
+        self._closed = True
+        self._connector: Connector | None = None
 
     @property
     def conn(self):
-        if self._conn is None or self._conn.closed:
-            self._conn = psycopg2.connect(self.config.pg_connection_string)
-            psycopg2.extras.register_uuid()
-            register_vector(self._conn)
+        if self._conn is None or self._closed:
+            if self.config.db_instance_connection_name:
+                # Cloud SQL Python Connector: IAM-authenticated, works from
+                # any environment without proxy sidecars or IP allowlisting
+                # (needed since Composer/Cloud Run workers have no stable
+                # IPs to authorize).
+                self._connector = Connector()
+                self._conn = self._connector.connect(
+                    self.config.db_instance_connection_name,
+                    "pg8000",
+                    user=self.config.db_user,
+                    password=self.config.db_password,
+                    db=self.config.db_name,
+                )
+            else:
+                # Local dev: plain TCP via Cloud SQL Auth Proxy on localhost.
+                from urllib.parse import urlparse
+
+                import pg8000.dbapi as dbapi
+
+                parsed = urlparse(self.config.pg_connection_string)
+                self._conn = dbapi.connect(
+                    user=parsed.username,
+                    password=parsed.password,
+                    host=parsed.hostname or "localhost",
+                    port=parsed.port or 5432,
+                    database=parsed.path.lstrip("/"),
+                )
+            _register_vector_dbapi(self._conn)
+            self._closed = False
         return self._conn
 
     def ensure_table(self) -> None:
         """Create the vector extension, table, and index if they don't exist."""
-        with self.conn.cursor() as cur:
-            cur.execute(EXTENSION_DDL)
+        cur = self.conn.cursor()
+        cur.execute(EXTENSION_DDL)
         self.conn.commit()
-        with self.conn.cursor() as cur:
-            cur.execute(
-                TABLE_DDL.format(
-                    table=self.config.vector_table,
-                    dims=self.config.embedding_dimensions,
-                )
+        cur.execute(
+            TABLE_DDL.format(
+                table=self.config.vector_table,
+                dims=self.config.embedding_dimensions,
             )
-            try:
-                cur.execute(
-                    INDEX_DDL.format(table=self.config.vector_table)
-                )
-            except Exception:
-                # index may already exist on second run
-                pass
+        )
+        try:
+            cur.execute(INDEX_DDL.format(table=self.config.vector_table))
+        except Exception:
+            # index may already exist on second run
+            pass
         self.conn.commit()
+        cur.close()
         logger.info("Ensured table %s exists", self.config.vector_table)
 
     def store_chunk(
@@ -81,25 +130,26 @@ class VectorStore:
         metadata: dict | None = None,
     ) -> int:
         """Insert a single chunk with its embedding. Returns the row ID."""
-        with self.conn.cursor() as cur:
-            cur.execute(
-                f"""
-                INSERT INTO {self.config.vector_table}
-                    (source, filename, chunk_index, content, embedding, metadata)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING id
-                """,
-                (
-                    source,
-                    filename,
-                    chunk_index,
-                    content,
-                    embedding,
-                    json.dumps(metadata or {}),
-                ),
-            )
-            row_id = cur.fetchone()[0]
+        cur = self.conn.cursor()
+        cur.execute(
+            f"""
+            INSERT INTO {self.config.vector_table}
+                (source, filename, chunk_index, content, embedding, metadata)
+            VALUES (%s, %s, %s, %s, %s::vector, %s::jsonb)
+            RETURNING id
+            """,
+            (
+                source,
+                filename,
+                chunk_index,
+                content,
+                Vector(embedding),
+                json.dumps(metadata or {}),
+            ),
+        )
+        row_id = cur.fetchone()[0]
         self.conn.commit()
+        cur.close()
         return row_id
 
     def store_chunks(
@@ -114,34 +164,28 @@ class VectorStore:
         if len(chunks) != len(embeddings):
             raise ValueError("chunks and embeddings must have the same length")
 
-        rows = []
+        cur = self.conn.cursor()
+        ids: list[int] = []
         for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
-            rows.append(
+            cur.execute(
+                f"""
+                INSERT INTO {self.config.vector_table}
+                    (source, filename, chunk_index, content, embedding, metadata)
+                VALUES (%s, %s, %s, %s, %s::vector, %s::jsonb)
+                RETURNING id
+                """,
                 (
                     source,
                     filename,
                     chunk.get("chunk_index", i),
                     chunk["content"],
-                    emb,
+                    Vector(emb),
                     json.dumps(metadata or {}),
-                )
+                ),
             )
-
-        ids: list[int] = []
-        with self.conn.cursor() as cur:
-            psycopg2.extras.execute_values(
-                cur,
-                f"""
-                INSERT INTO {self.config.vector_table}
-                    (source, filename, chunk_index, content, embedding, metadata)
-                VALUES %s
-                RETURNING id
-                """,
-                rows,
-                template="(%s, %s, %s, %s, %s::vector, %s::jsonb)",
-            )
-            ids = [r[0] for r in cur.fetchall()]
+            ids.append(cur.fetchone()[0])
         self.conn.commit()
+        cur.close()
         logger.info("Stored %d chunks in %s", len(ids), self.config.vector_table)
         return ids
 
@@ -151,18 +195,19 @@ class VectorStore:
         top_k: int = 10,
     ) -> list[dict]:
         """Find the top_k most similar chunks by cosine distance."""
-        with self.conn.cursor() as cur:
-            cur.execute(
-                f"""
-                SELECT id, source, filename, chunk_index, content, metadata,
-                       1 - (embedding <=> %s::vector) AS similarity
-                FROM {self.config.vector_table}
-                ORDER BY embedding <=> %s::vector
-                LIMIT %s
-                """,
-                (query_embedding, query_embedding, top_k),
-            )
-            rows = cur.fetchall()
+        cur = self.conn.cursor()
+        cur.execute(
+            f"""
+            SELECT id, source, filename, chunk_index, content, metadata,
+                   1 - (embedding <=> %s::vector) AS similarity
+            FROM {self.config.vector_table}
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s
+            """,
+            (Vector(query_embedding), Vector(query_embedding), top_k),
+        )
+        rows = cur.fetchall()
+        cur.close()
         return [
             {
                 "id": r[0],
@@ -177,5 +222,9 @@ class VectorStore:
         ]
 
     def close(self) -> None:
-        if self._conn and not self._conn.closed:
+        if self._conn and not self._closed:
             self._conn.close()
+            self._closed = True
+        if self._connector is not None:
+            self._connector.close()
+            self._connector = None
